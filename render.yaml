@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: hrms
+    env: php
+    buildCommand: composer install --no-dev --optimize-autoloader
+    startCommand: php artisan serve --host=0.0.0.0 --port=$PORT
+    healthCheckPath: /
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: LOG_LEVEL
+        value: info
+      - key: APP_URL
+        fromService:
+          name: hrms
+          type: web
+          property: host
+
+databases:
+  - name: hrms-db
+    plan: free
+    databaseName: hrms
+    user: hrms_user
+
+
