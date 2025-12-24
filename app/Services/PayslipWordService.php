@@ -508,41 +508,109 @@ class PayslipWordService
         $pdfPath = str_replace('.docx', '.pdf', $wordPath);
         
         // Windows路径
-        $sofficePaths = [
-            '"C:\\Program Files\\LibreOffice\\program\\soffice.exe"',
-            '"C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe"',
-        ];
+        $sofficePath = $this->getLibreOfficePath();
         
-        $sofficePath = null;
-        foreach ($sofficePaths as $path) {
-            $cleanPath = trim($path, '"');
-            if (file_exists($cleanPath)) {
-                $sofficePath = $path;
-                break;
-            }
-        }
-        
-        // Linux/Mac
         if (!$sofficePath) {
-            $sofficePath = 'soffice';
+             throw new \Exception("未找到LibreOffice (soffice.exe)。请确保已安装LibreOffice。");
         }
         
         // 构建转换命令
-        $command = sprintf(
-            '%s --headless --convert-to pdf --outdir "%s" "%s"',
-            $sofficePath,
-            $outputDir,
-            $wordPath
-        );
+        // 使用 start /wait 确保命令执行完成，并处理空格路径
+        if (PHP_OS_FAMILY === 'Windows') {
+             $command = sprintf(
+                'cd /d "%s" && "%s" --headless --convert-to pdf --outdir "%s" "%s"',
+                $outputDir,
+                $sofficePath,
+                $outputDir,
+                $wordPath
+            );
+        } else {
+             $command = sprintf(
+                '%s --headless --convert-to pdf --outdir "%s" "%s"',
+                $sofficePath,
+                $outputDir,
+                $wordPath
+            );
+        }
         
         // 执行命令
         exec($command, $output, $returnCode);
         
-        if ($returnCode !== 0 || !file_exists($pdfPath)) {
-            throw new \Exception("Word转PDF失败: " . implode("\n", $output));
+        if (!file_exists($pdfPath)) {
+            // 尝试备用命令格式 (直接调用，不cd)
+            $command = sprintf(
+                '"%s" --headless --convert-to pdf --outdir "%s" "%s"',
+                $sofficePath,
+                $outputDir,
+                $wordPath
+            );
+             exec($command, $output2, $returnCode2);
+        }
+        
+        if (!file_exists($pdfPath)) {
+            Log::error("LibreOffice转换失败", ['output' => $output, 'command' => $command]);
+            throw new \Exception("Word转PDF失败。请检查LibreOffice安装或使用HTML模式。");
         }
         
         return $pdfPath;
+    }
+
+    /**
+     * 获取LibreOffice可执行文件路径
+     */
+    protected function getLibreOfficePath(): ?string
+    {
+        if (PHP_OS_FAMILY !== 'Windows') {
+            return 'soffice';
+        }
+
+        // 1. 检查常见硬编码路径
+        $commonPaths = [
+            'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
+            'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe',
+            'C:\\Program Files\\LibreOffice 24\\program\\soffice.exe', // 新版本可能带有版本号
+            'C:\\Program Files\\LibreOffice 7\\program\\soffice.exe',
+        ];
+
+        foreach ($commonPaths as $path) {
+            if (file_exists($path)) {
+                return $path;
+            }
+        }
+
+        // 2. 尝试从注册表查找 (需要 shell_exec 权限)
+        try {
+            // 查找安装路径
+            $regCommand = 'reg query "HKLM\\SOFTWARE\\LibreOffice\\LibreOffice" /s';
+            $output = shell_exec($regCommand);
+            if ($output) {
+                // 简单的正则匹配尝试找到 InstallPath 类似的键值，或者直接推断
+                // 这里我们尝试通过关联的文件类型命令来找
+            }
+            
+            $regCommand2 = 'reg query "HKCR\\Applications\\soffice.exe\\shell\\open\\command" /ve';
+            $output2 = shell_exec($regCommand2);
+            // 输出类似: (默认)    REG_SZ    "C:\Program Files\LibreOffice\program\soffice.exe" "%1"
+            if ($output2 && preg_match('/"([^"]*soffice\.exe)"/', $output2, $matches)) {
+                 if (file_exists($matches[1])) {
+                     return $matches[1];
+                 }
+            }
+        } catch (\Exception $e) {
+            // 忽略注册表查询错误
+        }
+
+        // 3. 尝试使用 where 命令
+        $output = shell_exec('where soffice');
+        if ($output) {
+            $lines = explode("\n", trim($output));
+            $path = trim($lines[0]);
+            if (file_exists($path)) {
+                return $path;
+            }
+        }
+
+        return null;
     }
     
     /**

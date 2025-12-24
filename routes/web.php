@@ -41,6 +41,9 @@ Route::middleware('auth')->group(function () {
     
     // 薪资管理路由 - 自定义路由必须在resource路由之前定义
     Route::get('payrolls/monthly-calculation', [PayrollController::class, 'monthlyCalculation'])->name('payrolls.monthly-calculation');
+    Route::post('payrolls/roll-over', [PayrollController::class, 'rollOver'])->name('payrolls.roll-over'); // [NEW]
+    Route::post('payrolls/clear', [PayrollController::class, 'clearMonth'])->name('payrolls.clear'); // [NEW]
+    Route::post('payrolls/lock', [PayrollController::class, 'lockMonth'])->name('payrolls.lock'); // [NEW]
     Route::post('payrolls/batch-store', [PayrollController::class, 'batchStore'])->name('payrolls.batch-store');
     Route::post('payrolls/{payroll}/mark-as-paid', [PayrollController::class, 'markAsPaid'])->name('payrolls.mark-as-paid');
     Route::get('payrolls/{payroll}/download', [PayrollController::class, 'download'])->name('payrolls.download');

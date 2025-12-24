@@ -4,15 +4,15 @@
 
 ## 快速部署选项
 
-### 选项 1: Render.com（推荐，简单快速）
+### 选项 1: Railway.app（⭐ 最推荐，最简单）
 
-**优点：** 免费套餐、自动部署、简单配置
+**优点：** 免费试用、自动检测 Laravel、内置 MySQL、简单配置
 
 **步骤：**
 
-1. **注册 Render 账号**
-   - 访问 https://render.com
-   - 使用 GitHub/GitLab 账号登录
+1. **注册 Railway 账号**
+   - 访问 https://railway.app
+   - 使用 GitHub 账号登录（推荐）
 
 2. **推送代码到 Git 仓库**
    ```bash
@@ -21,22 +21,23 @@
    git add .
    git commit -m "Initial commit"
    
-   # 推送到 GitHub/GitLab
+   # 推送到 GitHub
    git remote add origin <your-repo-url>
    git push -u origin main
    ```
 
-3. **在 Render 创建 Web Service**
-   - 点击 "New +" → "Web Service"
-   - 连接您的 Git 仓库
-   - 配置如下：
-     - **Name:** hrms
-     - **Environment:** PHP
-     - **Build Command:** `composer install --no-dev --optimize-autoloader`
-     - **Start Command:** `php artisan serve --host=0.0.0.0 --port=$PORT`
-     - **Plan:** Free
+3. **在 Railway 创建项目**
+   - 登录后点击 "New Project"
+   - 选择 "Deploy from GitHub repo"
+   - 选择您的仓库
+   - Railway 会自动检测 Laravel 并配置
 
-4. **配置环境变量**
+4. **添加 MySQL 数据库**
+   - 在项目页面点击 "+ New"
+   - 选择 "Database" → "Add MySQL"
+   - Railway 会自动注入数据库环境变量
+
+5. **配置环境变量**
    在 Render 的 Environment 选项卡中添加：
    ```
    APP_NAME=HRMS
@@ -64,8 +65,30 @@
    CLOUDCONVERT_API_KEY=your-cloudconvert-key  # 可选
    ```
 
-5. **创建 MySQL 数据库**
-   - 在 Render 创建 "PostgreSQL" 或使用外部 MySQL 服务（如 PlanetScale、Aiven）
+### 选项 2: Render.com（使用 Docker）
+
+**优点：** 免费套餐、使用 Docker 灵活部署
+
+**步骤：**
+
+1. **确保项目根目录有 Dockerfile**（已为您创建）
+
+2. **推送代码到 Git 仓库**
+
+3. **在 Render 创建 Web Service**
+   - 访问 https://render.com
+   - 点击 "New +" → "Web Service"
+   - 连接 Git 仓库
+   - 配置：
+     - **Environment:** Docker
+     - **Dockerfile Path:** `Dockerfile`
+     - **Plan:** Free
+
+4. **添加 PostgreSQL 数据库**
+   - Render 免费版提供 PostgreSQL
+   - 或使用外部 MySQL（如 PlanetScale 免费版）
+
+5. **配置环境变量**（同上）
 
 6. **运行数据库迁移**
    - 在 Render 的 Shell 中运行：

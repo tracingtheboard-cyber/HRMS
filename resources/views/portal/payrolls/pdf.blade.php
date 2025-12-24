@@ -126,9 +126,8 @@ td{
   padding-right: 4mm;
 }
 .sheet{
-  width: 210mm;
-  max-width: 210mm;
-  min-width: 210mm;
+  width: 100%;
+  margin: 0 auto;
 }
 
 
@@ -226,6 +225,294 @@ td{
   <div class="company-footer">
     <div>Page 1 of 1</div>
   </div>
+
+</div>
+</div>
+</body>
+</html>
+/* ===== TITLE ===== */
+.title{
+  text-align:center;
+  font-size:15px;
+  font-weight:700;
+  margin-bottom:2mm;
+}
+.right-head{
+  text-align:right;
+  font-weight:700;
+  font-size:12px;
+  margin-top:-12px;
+}
+
+/* ===== INFO BOXES (比例方案) ===== */
+.info-row{
+  display:flex;
+  width:100%;
+  gap:3%;
+  margin:4mm 0 6mm 0;
+}
+
+.info-box{
+  border:1px solid #000;
+  border-radius:10px;
+  padding:6px 10px;
+  box-sizing:border-box;
+  font-size:12px;
+  line-height:1.35;
+}
+
+.left-box{ flex:0 0 30%; }
+.right-box{ flex:0 0 30%; margin-left: auto;text-align:right; }
+
+.company-name{ font-weight:700; }
+.page-no{ font-weight:700; margin-bottom:4px; }
+
+/* ===== SECTIONS ===== */
+.section{
+  font-weight:700;
+  margin-top:8px;
+}
+
+/* ===== TABLE ===== */
+table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:12px;
+}
+td{
+  padding:1px 0;
+}
+.l{ width:64%; }
+.m{ width:18%; text-align:right; }
+.r{ width:18%; text-align:right; }
+
+/* 子项目右缩进（锁定 8mm） */
+.item-indent{
+  padding-left:8mm;
+}
+
+/* ===== FOOTER ===== */
+.footer{
+  margin-top:6px;
+}
+.sign{
+  display:flex;
+  justify-content:space-between;
+  margin-top:8px;
+  margin-right: 20%;
+}
+.company-footer{
+  display:flex;
+  justify-content:space-between;
+  margin-top:6px;
+  font-weight:700;
+}
+
+
+/* 金额表头条 */
+.amount-head{
+  display: grid;
+  grid-template-columns: 64% 18% 18%; /* 和表格三列一致 */
+  border: 1px solid #000;
+  border-radius: 10px;
+  padding: 4px 0;
+  margin: 6px 0 4px 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* 左空区（项目列） */
+.amount-head .ah-left{
+  padding-left: 8mm; /* 对齐子项目缩进 */
+}
+
+/* 中、右标题 */
+.amount-head .ah-mid,
+.amount-head .ah-right{
+  text-align: right;
+  padding-right: 4mm;
+}
+.sheet{
+  width: 100%;
+  margin: 0 auto;
+}
+
+
+</style>
+</head>
+
+<body>
+<div class="sheet">
+<div class="page">
+
+  <!-- ===== HEADER ===== -->
+  <table style="width:100%; margin-bottom: 20px;">
+    <tr>
+      <td style="text-align: center;">
+        @if($payroll->user->company && $payroll->user->company->code)
+          <div style="font-size: 12px;">UEN: {{ $payroll->user->company->code }}</div>
+        @endif
+        <div style="font-size: 14px; font-weight: bold; margin-top: 10px; text-transform: uppercase;">
+          Payslip for {{ \Carbon\Carbon::create($payroll->year, $payroll->month, 1)->format('F Y') }}
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- ===== INFO BOXES ===== -->
+  <table style="width:100%; border: 1px solid #000; padding: 10px; margin-bottom: 20px;">
+    <tr>
+      <td style="width: 50%; vertical-align: top;">
+         <div style="margin-bottom: 4px;"><span style="font-weight: bold;">Name:</span> {{ $payroll->user->name }}</div>
+         <div style="margin-bottom: 4px;"><span style="font-weight: bold;">Position:</span> {{ $payroll->user->position ?? '-' }}</div>
+         <div><span style="font-weight: bold;">NRIC/FIN:</span> {{ $payroll->user->nric_fin ?? '-' }}</div>
+      </td>
+      <td style="width: 50%; vertical-align: top; text-align: right;">
+         <div style="margin-bottom: 4px;"><span style="font-weight: bold;">Commencement Date:</span> {{ $payroll->user->commencement_date ? $payroll->user->commencement_date->format('d/m/Y') : '-' }}</div>
+         <div><span style="font-weight: bold;">Pay Period:</span> {{ \Carbon\Carbon::create($payroll->year, $payroll->month, 1)->startOfMonth()->format('d/m/Y') }} - {{ \Carbon\Carbon::create($payroll->year, $payroll->month, 1)->endOfMonth()->format('d/m/Y') }}</div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- ===== MAIN CONTENT (2 COLUMN TABLE) ===== -->
+  <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+    <tr>
+      <!-- LEFT COLUMN: EARNINGS -->
+      <td style="width: 48%; vertical-align: top; border: 1px solid #000; padding: 0;">
+        <div style="padding: 5px 10px; font-weight: bold; font-size: 12px; border-bottom: 1px solid #000;">EARNINGS</div>
+        <table style="width: 100%; padding: 5px;">
+            <tr>
+                <td style="padding: 3px;">Basic Salary</td>
+                <td style="text-align: right; padding: 3px;">{{ number_format($payroll->base_salary, 2) }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 3px;">Allowances</td>
+                <td style="text-align: right; padding: 3px;">{{ number_format($payroll->allowances, 2) }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 3px;">Bonus</td>
+                <td style="text-align: right; padding: 3px;">{{ number_format($payroll->bonus, 2) }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 3px;">Overtime / Others</td>
+                <td style="text-align: right; padding: 3px;">{{ number_format($payroll->overtime_other, 2) }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 3px;">Unutilised Pay Leave</td>
+                <td style="text-align: right; padding: 3px;">{{ number_format($payroll->unutilised_pay_leave, 2) }}</td>
+            </tr>
+            @if($payroll->unpaid_leave > 0)
+            <tr>
+                <td style="padding: 3px;">Unpaid Leave</td>
+                <td style="text-align: right; padding: 3px;">-{{ number_format($payroll->unpaid_leave, 2) }}</td>
+            </tr>
+            @endif
+             <!-- Spacer to push total to bottom if needed, or just let it flow -->
+             <tr><td colspan="2" style="height: 10px;"></td></tr>
+            <tr style="font-weight: bold; border-top: 1px solid #ccc;">
+                <td style="padding: 5px 3px;">Total Earnings</td>
+                <td style="text-align: right; padding: 5px 3px;">{{ number_format($payroll->total_earnings, 2) }}</td>
+            </tr>
+        </table>
+      </td>
+
+      <!-- SPACER COLUMN -->
+      <td style="width: 4%;"></td>
+
+      <!-- RIGHT COLUMN: DEDUCTIONS -->
+      <td style="width: 48%; vertical-align: top; border: 1px solid #000; padding: 0;">
+        <div style="padding: 5px 10px; font-weight: bold; font-size: 12px; border-bottom: 1px solid #000;">DEDUCTIONS</div>
+        <table style="width: 100%; padding: 5px;">
+            <tr>
+                <td style="padding: 3px;">Employee CPF</td>
+                <td style="text-align: right; padding: 3px;">{{ number_format($payroll->employee_cpf, 2) }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 3px;">CDAC / MBMF / SINDA</td>
+                <td style="text-align: right; padding: 3px;">{{ number_format($payroll->cdac_mbmf_sinda, 2) }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 3px;">Tax</td>
+                <td style="text-align: right; padding: 3px;">{{ number_format($payroll->tax, 2) }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 3px;">Other Deductions</td>
+                <td style="text-align: right; padding: 3px;">{{ number_format($payroll->deductions, 2) }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 3px;">Advance / Loan</td>
+                <td style="text-align: right; padding: 3px;">{{ number_format(abs($payroll->advance_loan), 2) }}</td>
+            </tr>
+            
+            <tr><td colspan="2" style="height: 10px;"></td></tr>
+            <tr style="font-weight: bold; border-top: 1px solid #ccc;">
+                <td style="padding: 5px 3px;">Total Deductions</td>
+                <td style="text-align: right; padding: 5px 3px;">{{ number_format($payroll->total_deduction + abs($payroll->advance_loan), 2) }}</td>
+            </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <!-- ===== NET PAY ===== -->
+  <div style="border: 1px solid #000; padding: 10px; margin-bottom: 20px; border-radius: 5px;">
+    <table style="width: 100%;">
+        <tr>
+            <td style="font-size: 14px; font-weight: bold;">NET PAY</td>
+            <td style="text-align: right; font-size: 18px; font-weight: bold;">SGD {{ number_format($payroll->net_pay_after_other_deduction, 2) }}</td>
+        </tr>
+    </table>
+  </div>
+
+  <!-- ===== EMPLOYER & BANK INFO ===== -->
+  <table style="width: 100%; margin-bottom: 30px;">
+    <tr>
+        <td style="width: 48%; vertical-align: top; border: 1px solid #000; padding: 10px;">
+            <div style="font-weight: bold; margin-bottom: 5px;">EMPLOYER CONTRIBUTIONS</div>
+            <table style="width: 100%; font-size: 11px;">
+                <tr>
+                    <td>Employer CPF:</td>
+                    <td style="text-align: right; font-weight: bold;">{{ number_format($payroll->employer_cpf, 2) }}</td>
+                </tr>
+                <tr>
+                    <td>SDL:</td>
+                    <td style="text-align: right; font-weight: bold;">{{ number_format($payroll->sdl, 2) }}</td>
+                </tr>
+            </table>
+        </td>
+        <td style="width: 4%;"></td>
+        <td style="width: 48%; vertical-align: top; border: 1px solid #000; padding: 10px;">
+             <div style="font-weight: bold; margin-bottom: 5px;">PAYMENT DETAILS</div>
+             <table style="width: 100%; font-size: 11px;">
+                <tr>
+                    <td>Bank Name:</td>
+                    <td style="text-align: right; font-weight: bold;">{{ $payroll->bank_name ?? 'N/A' }}</td>
+                </tr>
+                <tr>
+                    <td>Account No:</td>
+                    <td style="text-align: right; font-weight: bold;">{{ $payroll->bank_account_number ?? 'N/A' }}</td>
+                </tr>
+                <tr>
+                    <td>Payment Date:</td>
+                    <td style="text-align: right; font-weight: bold;">{{ $payroll->credit_date ? $payroll->credit_date->format('d/m/Y') : 'Pending' }}</td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+  </table>
+
+  <!-- ===== SIGNATURES ===== -->
+  <table style="width: 100%; margin-top: 40px;">
+    <tr>
+        <td style="width: 40%; text-align: center; border-top: 1px solid #000; padding-top: 5px;">
+            Prepared by: {{ $payroll->preparer->name ?? 'HR Department' }}
+        </td>
+        <td style="width: 20%;"></td>
+        <td style="width: 40%; text-align: center; border-top: 1px solid #000; padding-top: 5px;">
+            Approved by: {{ $payroll->approver->name ?? 'Management' }}
+        </td>
+    </tr>
+  </table>
 
 </div>
 </div>

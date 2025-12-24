@@ -188,23 +188,38 @@ class PayrollController extends Controller
         
         $payroll->load(['user.company', 'preparer', 'approver']);
         
-        // 尝试使用Word模板生成PDF
+        // 尝试使用Word模板生成
         $templatePath = storage_path('app/templates/payslip_template.docx');
         
         if (file_exists($templatePath)) {
             try {
                 $wordService = new PayslipWordService();
-                $pdfPath = $wordService->generatePdf($payroll, $templatePath);
                 
-                if (file_exists($pdfPath)) {
-                    $filename = 'Payslip_' . $payroll->year . str_pad($payroll->month, 2, '0', STR_PAD_LEFT) . '_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $payroll->user->name) . '.pdf';
+                // 1. 先生成 Word 文档
+                $wordPath = $wordService->generateWord($payroll, $templatePath);
+                
+                try {
+                    // 2. 尝试转换为 PDF
+                    $pdfPath = $wordService->convertToPdf($wordPath);
                     
-                    // 返回PDF下载
-                    return response()->download($pdfPath, $filename)->deleteFileAfterSend(true);
+                    if (file_exists($pdfPath)) {
+                        $filename = 'Payslip_' . $payroll->year . str_pad($payroll->month, 2, '0', STR_PAD_LEFT) . '_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $payroll->user->name) . '.pdf';
+                        // 转换成功，下载 PDF
+                        return response()->download($pdfPath, $filename)->deleteFileAfterSend(true);
+                    }
+                } catch (\Exception $e) {
+                    // 3. 转换 PDF 失败 (没有安装 Office/LibreOffice 或未配置 API)
+                    // 降级方案：直接下载 Word 文档，并提示用户
+                    \Log::warning('Word转PDF失败，降级为下载Word文档: ' . $e->getMessage());
+                    
+                    $filename = 'Payslip_' . $payroll->year . str_pad($payroll->month, 2, '0', STR_PAD_LEFT) . '_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $payroll->user->name) . '.docx';
+                    
+                    return response()->download($wordPath, $filename)->deleteFileAfterSend(true);
                 }
+                
             } catch (\Exception $e) {
-                // 如果Word模板方式失败，回退到HTML方式
-                \Log::warning('Word模板生成PDF失败，使用HTML备用方案: ' . $e->getMessage());
+                // Word 生成本身失败
+                \Log::warning('Word模板生成失败，使用HTML备用方案: ' . $e->getMessage());
             }
         }
         
@@ -478,7 +493,14 @@ class PayrollController extends Controller
             ->get()
             ->keyBy('user_id');
 
-        return view('payrolls.monthly-calculation', compact('employees', 'existingPayrolls', 'year', 'month'));
+        // 检查当月是否已锁定
+        $isLocked = Payroll::whereIn('user_id', $employees->pluck('id'))
+            ->where('year', $year)
+            ->where('month', $month)
+            ->where('status', 'locked')
+            ->exists();
+
+        return view('payrolls.monthly-calculation', compact('employees', 'existingPayrolls', 'year', 'month', 'isLocked'));
     }
 
     /**
@@ -750,4 +772,164 @@ class PayrollController extends Controller
 
         return back()->with('error', '模板文件不存在');
     }
+
+    /**
+     * 将上个月的工资数据滚存到当月
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\Response
+     */
+    public function rollOver(Request $request) 
+    {
+        $companyId = $this->getActiveCompanyId();
+        if (!$companyId) {
+            return back()->with('error', '请先选择公司');
+        }
+
+        $year = $request->input('year');
+        $month = $request->input('month');
+
+        // 计算上个月
+        $prevYear = $year;
+        $prevMonth = $month - 1;
+        if ($prevMonth == 0) {
+            $prevMonth = 12;
+            $prevYear--;
+        }
+
+        // 检查当月是否已锁定
+        $isLocked = Payroll::whereHas('user', function ($query) use ($companyId) {
+            $query->where('company_id', $companyId);
+        })
+        ->where('year', $year)
+        ->where('month', $month)
+        ->where('status', 'locked')
+        ->exists();
+
+        if ($isLocked) {
+            return back()->with('error', '当月工资已锁定，无法重新计算');
+        }
+
+        // 获取上个月的工资记录
+        $prevPayrolls = Payroll::with('user')
+            ->whereHas('user', function ($query) use ($companyId) {
+                $query->where('company_id', $companyId);
+            })
+            ->where('year', $prevYear)
+            ->where('month', $prevMonth)
+            ->get();
+
+        if ($prevPayrolls->isEmpty()) {
+            return back()->with('warning', '上个月没有工资记录，无法滚存');
+        }
+
+        $count = 0;
+        foreach ($prevPayrolls as $prev) {
+            // 检查当月是否已有记录
+            $exists = Payroll::where('user_id', $prev->user_id)
+                ->where('year', $year)
+                ->where('month', $month)
+                ->exists();
+
+            if (!$exists) {
+                // 创建新记录，只复制基础工资和固定信息，重置变动项
+                Payroll::create([
+                    'user_id' => $prev->user_id,
+                    'year' => $year,
+                    'month' => $month,
+                    'base_salary' => $prev->base_salary,
+                    'allowances' => $prev->allowances, // 假设津贴是固定的
+                    'employer_cpf' => $prev->employer_cpf, // 假设CPF计算方式类似，后续可能需要重新计算逻辑
+                    'sdl' => $prev->sdl,
+                    'bank_name' => $prev->bank_name,
+                    'bank_account_number' => $prev->bank_account_number,
+                    'prepared_by' => Auth::id(),
+                    'status' => 'pending',
+                    // 以下变动项重置为0
+                    'overtime_other' => 0,
+                    'bonus' => 0,
+                    'unutilised_pay_leave' => 0,
+                    'unpaid_leave' => 0,
+                    'total_earnings' => $prev->base_salary + $prev->allowances, // 初始估算
+                    'deductions' => 0,
+                    'tax' => 0,
+                    'advance_loan' => 0,
+                    // 其他字段根据需要初始化
+                ]);
+                $count++;
+            }
+        }
+
+        return back()->with('success', "成功从上月滚存 {$count} 条记录");
+    }
+
+    /**
+     * 锁定当月工资
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\Response
+     */
+    public function lockMonth(Request $request)
+    {
+        $companyId = $this->getActiveCompanyId();
+        if (!$companyId) {
+            return back()->with('error', '请先选择公司');
+        }
+
+        $year = $request->input('year');
+        $month = $request->input('month');
+
+        // 更新状态为 locked
+        $affected = Payroll::whereHas('user', function ($query) use ($companyId) {
+            $query->where('company_id', $companyId);
+        })
+        ->where('year', $year)
+        ->where('month', $month)
+        ->where('status', '!=', 'locked')
+        ->update(['status' => 'locked']);
+
+        return back()->with('success', "成功锁定 {$affected} 条工资记录");
+    }
+
+    /**
+     * 清空当月工资记录
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\Response
+     */
+    public function clearMonth(Request $request)
+    {
+        $companyId = $this->getActiveCompanyId();
+        if (!$companyId) {
+            return back()->with('error', '请先选择公司');
+        }
+
+        $year = $request->input('year');
+        $month = $request->input('month');
+
+        // 检查当月是否已锁定
+        $isLocked = Payroll::whereHas('user', function ($query) use ($companyId) {
+            $query->where('company_id', $companyId);
+        })
+        ->where('year', $year)
+        ->where('month', $month)
+        ->where('status', 'locked')
+        ->exists();
+
+        if ($isLocked) {
+            return back()->with('error', '当月工资已锁定，无法清空');
+        }
+
+        // 删除非 paid 的记录
+        $deleted = Payroll::whereHas('user', function ($query) use ($companyId) {
+            $query->where('company_id', $companyId);
+        })
+        ->where('year', $year)
+        ->where('month', $month)
+        ->where('status', '!=', 'paid') // 防止误删已支付记录
+        ->delete();
+
+        return back()->with('success', "成功清空 {$deleted} 条工资记录");
+    }
 }
+

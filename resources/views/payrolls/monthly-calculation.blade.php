@@ -3,14 +3,14 @@
 @section('title', '月度工资核算')
 
 @section('content')
-<div class="container-fluid py-4" style="margin-left: calc(-1 * var(--bs-gutter-x, 1.5rem)); margin-right: calc(-1 * var(--bs-gutter-x, 1.5rem)); width: calc(150% + var(--bs-gutter-x, 1.5rem) * 2);">
+<div class="container-fluid py-4">
     <div class="card" style="width: 100%;">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h4><i class="bi bi-table"></i> 月度工资核算</h4>
             <div class="d-flex gap-2">
                 <form action="{{ route('payrolls.monthly-calculation') }}" method="GET" class="d-flex gap-2">
                     <select name="year" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
-                        @for($y = date('Y'); $y >= date('Y') - 5; $y--)
+                        @for($y = date('Y') + 1; $y >= date('Y') - 5; $y--)
                             <option value="{{ $y }}" {{ $year == $y ? 'selected' : '' }}>{{ $y }}年</option>
                         @endfor
                     </select>
@@ -20,20 +20,60 @@
                         @endfor
                     </select>
                 </form>
-                <button type="button" class="btn btn-primary btn-sm" onclick="saveAllPayrolls()">
-                    <i class="bi bi-save"></i> 保存所有
-                </button>
+
+                @if(isset($isLocked) && $isLocked)
+                    <span class="badge bg-danger d-flex align-items-center">
+                        <i class="bi bi-lock-fill me-1"></i> 已锁定
+                    </span>
+                @else
+                    {{-- Roll Over Form --}}
+                    <form action="{{ route('payrolls.roll-over') }}" method="POST" onsubmit="return confirm('确定要将上个月的工资数据滚存到本月吗？这将创建新的记录。')">
+                        @csrf
+                        <input type="hidden" name="year" value="{{ $year }}">
+                        <input type="hidden" name="month" value="{{ $month }}">
+                        <button type="submit" class="btn btn-info btn-sm text-white">
+                            <i class="bi bi-arrow-repeat"></i> 从上月滚存
+                        </button>
+                    </form>
+
+                    {{-- Clear Form --}}
+                    {{-- Clear Button (Client-side only) --}}
+                    <button type="button" class="btn btn-warning btn-sm text-dark" onclick="clearTableInputs()">
+                        <i class="bi bi-trash"></i> 一键清空 (当前页)
+                    </button>
+
+                    <button type="button" class="btn btn-primary btn-sm" onclick="saveAllPayrolls()">
+                        <i class="bi bi-save"></i> 保存所有
+                    </button>
+                    
+                    {{-- Lock Form --}}
+                    <form action="{{ route('payrolls.lock') }}" method="POST" onsubmit="return confirm('确定要锁定本月工资吗？锁定后将无法修改！')">
+                        @csrf
+                        <input type="hidden" name="year" value="{{ $year }}">
+                        <input type="hidden" name="month" value="{{ $month }}">
+                        <button type="submit" class="btn btn-danger btn-sm">
+                            <i class="bi bi-lock"></i> 锁定 (Close)
+                        </button>
+                    </form>
+                @endif
+                
                 <a href="{{ route('payrolls.index') }}" class="btn btn-secondary btn-sm">
                     <i class="bi bi-arrow-left"></i> 返回列表
                 </a>
             </div>
         </div>
         <div class="card-body" style="overflow-x: auto; padding: 1.5rem 0.5rem;">
+            @if(isset($isLocked) && $isLocked)
+                <div class="alert alert-warning">
+                    <i class="bi bi-lock-fill"></i> 当前月份的工资已锁定，无法进行编辑。
+                </div>
+            @endif
+
             <form id="payrollForm" method="POST" action="{{ route('payrolls.batch-store') }}">
                 @csrf
                 <input type="hidden" name="year" value="{{ $year }}">
                 <input type="hidden" name="month" value="{{ $month }}">
-
+                <fieldset {{ (isset($isLocked) && $isLocked) ? 'disabled' : '' }}>
                 <table class="table table-bordered table-hover mx-auto" id="payrollTable" style="width: auto; border-collapse: collapse;">
                     <thead class="table-light">
                         <tr>
@@ -404,7 +444,7 @@
                                 <td>
                                     <input type="date" class="form-control form-control-sm" 
                                            name="payrolls[{{ $employee->id }}][credit_date]" 
-                                           value="{{ old("payrolls.{$employee->id}.credit_date", $payroll && $payroll->credit_date ? $payroll->credit_date->format('Y-m-d') : '') }}">
+                                           value="{{ old("payrolls.{$employee->id}.credit_date", $payroll && $payroll->credit_date ? $payroll->credit_date->format('Y-m-d') : \Carbon\Carbon::createFromDate($year, $month)->endOfMonth()->format('Y-m-d')) }}">
                                 </td>
                                 
                                 <!-- 备注 -->
@@ -439,6 +479,7 @@
                         </tr>
                     </tfoot>
                 </table>
+                </fieldset>
             </form>
         </div>
     </div>
@@ -923,6 +964,28 @@
         // 初始计算
         calculateTotals();
     });
+
+    // 清空当前页面的所有输入框（不涉及数据库）
+    function clearTableInputs() {
+        if (!confirm('确定要清空当前页面的工资数据吗？\n注意：这只会重置表格中的数字为0，不会删除数据库记录。')) {
+            return;
+        }
+
+        // 获取所有带有 data-field 属性的输入框（即工资项，忽略员工基本信息）
+        const inputs = document.querySelectorAll('#payrollTable input[data-field]');
+        
+        inputs.forEach(input => {
+            input.value = 0;
+            // 移除可能存在的 invalid 状态
+            input.classList.remove('is-invalid');
+        });
+
+        // 重新计算所有数据
+        calculateTotals();
+        
+        // 提示用户
+        // alert('表格数据已重置。请记得点击 [保存所有] 以应用更改到数据库。');
+    }
 
     // 保存所有工资记录
     function saveAllPayrolls() {
